@@ -150,6 +150,13 @@ final class Prefs {
         if (v == null) return null;
         List<String> out = new ArrayList<>();
         for (String p : v.split(",")) if (!p.isEmpty()) out.add(p);
+        if (!sp().getBoolean("topMemoryAdded", false)) {
+            // A list saved before the Free Up Memory button existed: it joins once, before Settings.
+            int at = out.indexOf("settings");
+            out.add(at < 0 ? out.size() : at, "memory");
+            setTopButtons(out);
+            put("topMemoryAdded", true);
+        }
         return out;
     }
 

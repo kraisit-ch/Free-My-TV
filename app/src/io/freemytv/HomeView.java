@@ -149,6 +149,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final List<HomeApps.Item> lightButtons = new ArrayList<>();
     private Paint lTitle, lTab, lTabOn, lCardTitle, lCardMeta, lQuote, lTip, lDate, lClock, lWeather, lClockQuote;
     private Shader lightGradient;
+    /** assets/wallpaper.png, when it exists: the background when no recommendation's photo is showing. */
+    private Bitmap wallpaper;
+    private boolean wallpaperLoading;
 
     // Shelf
     private List<HomeApps.Item> shelf = new ArrayList<>();
@@ -1064,6 +1067,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static List<HomeApps.Item> statusList(Context c) {
         List<HomeApps.Item> list = new ArrayList<>();
         list.addAll(HomeApps.shortcuts(c));
+        list.add(HomeApps.action(HomeApps.FREE_MEMORY, "memory", Ui.tr("Free Up Memory"), "memory"));
         list.add(HomeApps.settings());
         return list;
     }
@@ -2252,6 +2256,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             retarget(false);
             return;
         }
+        if (it.kind == HomeApps.FREE_MEMORY) {
+            showToast(Ui.tr("Working…"));
+            MemoryCleaner.run(getContext(), text -> handler.post(() -> showToast(text)));
+            return;
+        }
         boolean opened = HomeApps.open(activity, it, this, Math.round(r.left), Math.round(r.top),
                 Math.round(r.width()), Math.round(r.height()));
         if (!opened) showToast(Ui.trf("Couldn't open {app}.", "app", it.label));
@@ -2775,6 +2784,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         // Drawer open: the background lightens (by day) or darkens (at night), as a filter on the drawing itself.
         android.graphics.ColorFilter v = veil(tone(0.32f, 0.42f) * Ui.clamp(drawer.value), blend(0xFFFFFFFF, 0xFF000000, night));
         if (bgTo == null || (fading && bgFrom == null)) {
+            if (wallpaper == null && !wallpaperLoading) loadWallpaper();
+            if (wallpaper != null) {
+                imagePaint.setColorFilter(v);
+                c.drawBitmap(wallpaper, null, screen, imagePaint);
+                imagePaint.setColorFilter(null);
+            } else {
             if (lightGradient == null) lightGradient = Ui.gradient(h, 0xFFF5F5F7, 0xFFE2E2E7);
             if (nightGradient == null) nightGradient = Ui.gradient(h, 0xFF1C1C1E, 0xFF0B0B0D);
             fill.setColorFilter(v);
@@ -2791,11 +2806,32 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             }
             fill.setShader(null);
             fill.setColorFilter(null);
+            }
         }
         imagePaint.setColorFilter(v);
         if (fading && bgFrom != null) drawLightImage(c, bgFrom, bgTo == null ? 1 - e : 1);
         if (bgTo != null) drawLightImage(c, bgTo, fading ? e : 1);
         imagePaint.setColorFilter(null);
+    }
+
+    /** Decodes the wallpaper off the UI thread, at the size Backdrop uses. */
+    private void loadWallpaper() {
+        wallpaperLoading = true;
+        final Context ctx = getContext().getApplicationContext();
+        new Thread(() -> {
+            try (java.io.InputStream in = ctx.getAssets().open("wallpaper.png")) {
+                Bitmap b = android.graphics.BitmapFactory.decodeStream(in);
+                if (b != null && b.getWidth() != Backdrop.W) {
+                    Bitmap scaled = Bitmap.createScaledBitmap(b, Backdrop.W, Backdrop.H, true);
+                    b.recycle();
+                    b = scaled;
+                }
+                wallpaper = b;
+                sky.postInvalidate();
+            } catch (java.io.IOException e) {
+                // No wallpaper in assets: the gradient stays.
+            }
+        }, "wallpaper").start();
     }
 
     private void drawLightImage(Canvas c, Backdrop b, float alpha) {

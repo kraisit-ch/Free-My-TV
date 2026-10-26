@@ -133,6 +133,9 @@ final class HomeData {
 
     private static HomeData instance;
 
+    /** assets/wallpaper.png is bundled (see HomeView.loadWallpaper). */
+    private final boolean hasWallpaper;
+
     static synchronized HomeData get(Context c) {
         if (instance == null) instance = new HomeData(c.getApplicationContext());
         return instance;
@@ -153,6 +156,13 @@ final class HomeData {
 
     private HomeData(Context c) {
         cache = c.getSharedPreferences("homedata", Context.MODE_PRIVATE);
+        boolean wallpaper;
+        try (java.io.InputStream in = c.getAssets().open("wallpaper.png")) {
+            wallpaper = true;
+        } catch (java.io.IOException e) {
+            wallpaper = false;
+        }
+        hasWallpaper = wallpaper;
         inDollars = CURRENCY.equals(cache.getString("dollarsFor", ""));
         try {
             if (Prefs.quotes()) {
@@ -335,6 +345,7 @@ final class HomeData {
         String theme = Prefs.theme();
         if (theme.equals("dark")) return true;
         if (theme.equals("light")) return false;
+        if (hasWallpaper) return true;   // the wallpaper is dark purple: white text reads on it
         long t = Shaders.timeOfDay(now, 0);
         long rise = Shaders.timeOfDay(weather.sunrise, 6 * 60 * 60_000L);
         long set = Shaders.timeOfDay(weather.sunset, 18 * 60 * 60_000L);

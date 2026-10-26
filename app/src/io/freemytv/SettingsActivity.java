@@ -143,6 +143,8 @@ public class SettingsActivity extends Activity {
         private boolean hasKey;
         private int screen = MAIN, focus;
         private boolean running, okDown, backDown, wasBusy;
+        private String memoryText = "";   // the Free Up Memory row's value: working, the result or a problem
+        private boolean freeingMemory;
         private StaticLayout errorLayout;   // the last error, wrapped (rebuilt only when it changes)
         private String errorShown;
         private final Spoken spoken;
@@ -215,7 +217,7 @@ public class SettingsActivity extends Activity {
                         return Ui.trf("Home Screen, {mode}", "mode", value);
                     }
                     String[] names = {Ui.tr("Screensaver, preview"), Ui.tr("Home Settings"),
-                            Ui.tr("Shelf"), Ui.tr("Top Buttons"), Ui.tr("Remote Buttons"), Ui.tr("TV Settings")};
+                            Ui.tr("Shelf"), Ui.tr("Top Buttons"), Ui.tr("Remote Buttons"), Ui.tr("TV Settings"), Ui.tr("Free Up Memory")};
                     return row - 1 < names.length ? names[row - 1] : "";
                 }
                 case HOME_CHOICE: {
@@ -341,7 +343,7 @@ public class SettingsActivity extends Activity {
 
         private int rowCount() {
             switch (screen) {
-                case MAIN: return 7;
+                case MAIN: return 8;
                 case HOME_CHOICE: return 2;
                 case HOME_SETTINGS: return settingLabels().length;
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
@@ -383,8 +385,8 @@ public class SettingsActivity extends Activity {
             String mode = freeActive() ? "Free My TV" : Ui.tr("Original");
             String[] labels = {Ui.tr("Home Screen"), Ui.tr("Screensaver"),
                     Ui.tr("Home Settings"), Ui.tr("Shelf"), Ui.tr("Top Buttons"),
-                    Ui.tr("Remote Buttons"), Ui.tr("TV Settings")};
-            String[] values = {working ? "" : mode, Ui.tr("Preview"), "", "", "", "", ""};
+                    Ui.tr("Remote Buttons"), Ui.tr("TV Settings"), Ui.tr("Free Up Memory")};
+            String[] values = {working ? "" : mode, Ui.tr("Preview"), "", "", "", "", "", memoryText};
             for (int i = 0; i < labels.length; i++) {
                 float y = (MAIN_TOP + i * (ROW_H + MAIN_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + ROW_H * k);
@@ -394,7 +396,7 @@ public class SettingsActivity extends Activity {
                 float base = rowRect.centerY() + Ui.halfCap(rowLabel);
                 c.drawText(labels[i], rowRect.left + 30 * k, base, rowLabel);
                 float right = rowRect.right - 30 * k;
-                if (i >= 2) {
+                if (i >= 2 && i < 7) {
                     float cw = Symbols.width(getContext(), "chevron_right", 22 * k);
                     Symbols.draw(getContext(), c, "chevron_right", right - cw / 2, rowRect.centerY(), 22 * k, blend(0x66FFFFFF, 0x991C1C1E, f));
                 } else if (i == 0 && working) {
@@ -987,6 +989,17 @@ public class SettingsActivity extends Activity {
             }
         }
 
+        private void freeMemory() {
+            if (freeingMemory) return;
+            freeingMemory = true;
+            memoryText = Ui.tr("Working…");
+            MemoryCleaner.run(getContext(), text -> {
+                memoryText = text;
+                freeingMemory = false;
+                postInvalidate();
+            });
+        }
+
         private void activate() {
             Context c = getContext();
             if (screen == HOME_CHOICE) {
@@ -1047,8 +1060,10 @@ public class SettingsActivity extends Activity {
                 loadApps();
                 screen = REMOTE_KEYS;
                 focus = 0;
-            } else {
+            } else if (focus == 6) {
                 activity.startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } else {
+                freeMemory();
             }
             for (Spring s : pop) s.snap(0);
             invalidate();
